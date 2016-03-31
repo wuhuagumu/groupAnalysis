@@ -2,20 +2,31 @@ import numpy as np
 from numpy import linalg as LA
 class element():
 
-    def init(self, a):
+    def init(self, a, s = None):
         a = np.array(a, dtype='float')
         self.D = a[0:3, 0:3]
         self.t = a[:,3]
+        if s==None:
+            self.s = np.eye(2, dtype='complex')
+        else:
+            self.s = np.array(s, dtype='complex')
 
     def trans_init(self, a):
         self.D = np.eye(3)
         self.t = np.array(a, dtype='float')
+        self.s = np.eye(2, dtype='complex')
+    def spin_init(self, s):
+        self.D = np.eye(3)
+        self.t = np.zeros(3)
+        self.s = np.array(s, dtype='complex')
     def element_product(self, a, b):
         self.D = np.dot(a.D , b.D)
         self.t = np.dot(a.D, b.t) + a.t
+        self.s = np.dot(a.s, b.s)
     def zip_element(self):
         a = np.concatenate((self.D, np.array([self.t]).T), axis = 1)
-        return a
+        s = self.s
+        return a, s
     def xyz(self):
         x = str(np.sum(self.D[:, 0])) + 'x' + '+' + str(self.t[0])
         y = str(np.sum(self.D[:, 1])) + 'y' + '+' + str(self.t[1])
@@ -41,10 +52,11 @@ class group():
         self.multi_table()
     def check_equality(self, a, b):
         equal = False
-        if (a.D == b.D).all():
+        if (a.D == b.D).all() and np.allclose(a.s, b.s):
             t = a.t - b.t
             if np.mod(t[0], self.boundary[0]) == 0 and np.mod(t[1], self.boundary[1]) == 0 and np.mod(t[2], self.boundary[2]) == 0:
                 equal = True
+
         return equal
 
     def multi_table(self):
@@ -64,7 +76,9 @@ class group():
 
             #mtable1.append(line1)
             mtable.append(line)
-
+        #print("mtable", mtable)
+        #for i in mtable:
+        #    print(len(i))
         self.mtable = np.array(mtable, dtype='int')
         return mtable
 
@@ -202,7 +216,7 @@ class group():
 
         def simul_diag_cl_mat(H, vec):
             nc = len(H)
-            cl_table = np.zeros((nc,nc))
+            cl_table = np.zeros((nc,nc),dtype='complex')
             for i in range(nc):
                 diag = np.dot(LA.inv(vec), np.dot(H[i],vec))
                 #print("diag", np.diag(diag))
@@ -222,7 +236,7 @@ class group():
 
         def get_character_table(cl_table,dim):
             nc = len(cl_table)
-            character_table = np.zeros((nc, nc))
+            character_table = np.zeros((nc, nc),dtype='complex')
             for i in range(nc):
                 for j in range(nc):
                     character_table[i,j] = dim[i]/len(cl[j])*cl_table[i,j]
@@ -247,7 +261,7 @@ class group():
         return character_table
 
 
-#'''
+
 g = [
     [[1,0,0,0],[0,1,0,0],[0,0,1,0]], [[-1,0,0,0],[0,-1,0,0],[0,0,1,0.5]],
     [[-1, 0,0,0], [0,1,0,0.5], [0,0,-1,0.5]], [[1,0,0,0],[0,-1,0,0.5],[0,0,-1,0]],
@@ -255,14 +269,21 @@ g = [
     [[1,0,0,0],[0,-1,0,0.5], [0,0,1,0.5]], [[-1,0,0,0],[0,1,0,0.5], [0,0,1,0]]
 ]
 
+s = [
+    [[1,0],[0,1]], [[-1j, 0],[0,1j]],[[0,-1],[1,0]], [[0,-1j], [-1j,0]],
+    [[1,0],[0,1]], [[-1j, 0],[0,1j]],[[0,-1],[1,0]], [[0,-1j], [-1j,0]]
+]
 
 t = [[0,0,0], [0,1,0]]
 gk = []
 
-for i in g:
+for i in range(len(g)):
     tmp = element()
-    tmp.init(i)
+    tmp1 = element()
+    tmp.init(g[i],s[i] )
+    tmp1.init(g[i], -np.array(s[i], dtype='complex'))
     gk.append(tmp)
+    gk.append(tmp1)
 
 tk = []
 for i in t:
@@ -289,7 +310,4 @@ H = G.class_mul_constants()
 print(H)
 
 character_table = G.burnside_class_table()
-np.set_printoptions(precision=3)
-print(character_table)
-
-#'''
+np.savetxt('ct', character_table, '%5.2f')
