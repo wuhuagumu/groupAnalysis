@@ -262,12 +262,12 @@ g = [
 #@ZU 1,4,6,8
 
 
-t = [[0,0,0], [0,0,1]]
+t = [[0,0,0], [0,1,0]]
 gk = []
 
 #x = [i for i in range(len(g))]
-#x = [0,1,6,7] #UX
-x = [0,2,5,7] #UZ
+x = [0,1,6,7] #UX
+#x = [0,2,5,7] #UZ
 
 for i in x:
     tmp = element()
@@ -290,7 +290,7 @@ Tk.init(tk)
 print(Gk.find_class())
 
 G = group()
-G.group_product(Gk, Tk, boundary=[1,1,2])
+G.group_product(Gk, Tk, boundary=[1,2,1])
 print("g1 element",G.g[1].zip_element())
 print(G.order)
 print(G.find_class())
