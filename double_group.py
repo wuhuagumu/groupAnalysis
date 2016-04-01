@@ -179,7 +179,7 @@ class group():
         self.cl_mat = H
         return H
 
-    def burnside_class_table(self):
+    def burnside_character_table(self):
         # burnside method, try to find vectors that can simultaneously diagonalize cl_mat
         # the method is to find all non-degenerate eigenvectors, if not enough (we need number of class vectors)
         # add H[i] + H[j] iteratively
@@ -365,6 +365,6 @@ for i in range(4):
 H = G.class_mul_constants()
 # print(H)
 
-character_table = G.burnside_class_table()
+character_table = G.burnside_character_table()
 np.savetxt('ctd', character_table, '%5.2f')
 # '''
