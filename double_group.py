@@ -6,7 +6,7 @@ class element():
         a = np.array(a, dtype='float')
         self.D = a[0:3, 0:3]
         self.t = a[:,3]
-        if s==None:
+        if s is None:
             self.s = np.eye(2, dtype='complex')
         else:
             self.s = np.array(s, dtype='complex')
@@ -163,13 +163,18 @@ class group():
 
         def check_same_vec(vec):
             same_vec_index = []
+            #print("np.zeros nc", np.zeros((nc,nc)))
             for i in range(len(vec)):
+                x = np.nonzero(vec[i])
+                flag = x[0][0]
                 for j in range(i + 1, len(vec)):
+                    if not np.allclose(vec[j][flag], 0) :
+                        if np.allclose(vec[i], (vec[i][flag]/vec[j][flag])* vec[j]) :
 
-                    if np.allclose(vec[i], vec[j]) or np.allclose(vec[i], -vec[j]):
-                        same_vec_index.append(j)
+                            same_vec_index.append(j)
 
             same_vec_index = list(set(same_vec_index))
+            #print("same_vec_index",same_vec_index)
             same_vec_index = sorted(same_vec_index, reverse = True)
 
             for i in same_vec_index:
@@ -178,20 +183,26 @@ class group():
 
         #def check_same_eigenval(w):
 
-        def find_nondegenerate_vec(vec, H, nc):
+        def find_nondegenerate_vec(vec, H, nc, index_w):
             for i in range(len(H)):
                 w,v = LA.eig(H[i])
 
                 w = np.array(list(w))
-                w_argsort = np.argsort(w)
+
                 index = []
-                for j in range(len(w)):
-                    if abs(w[w_argsort[j % len(w)]] - w[w_argsort[(j - 1) % len(w)]]) > 1e-3 and abs(
-                                    w[w_argsort[(j + 1) % len(w)]] - w[w_argsort[j % len(w)]]) > 1e-3:
-                        index.append(w_argsort[j])
+                w1 = []
+                for k in range(len(w)):
+                    cnt = 0
+                    for j in range(len(w)):
+                        if abs(w[j] - w[k]) < 1e-3:
+                            cnt += 1
+                    if cnt == 1:
+                        index.append(k)
                 for j in index:
                     vec.append(v[:,j])
-            #print(vec)
+                    w1.append(w[j])
+                index_w.append(w1)
+
             if len(vec) > 1:
                 vec = check_same_vec(vec)
             if len(vec) != nc and len(H) > 1:
@@ -200,11 +211,16 @@ class group():
                     h.append(H[i] + H[i+1])
 
 
-                return find_nondegenerate_vec(vec, h, nc)
+                return find_nondegenerate_vec(vec, h, nc, index_w)
             elif len(vec) == nc:
                 return vec
             else:
-                print("ERROR IN RECURSION (burnside method)")
+                #print("vec", np.shape(vec))
+                print("index_w", index_w)
+                np.savetxt('vec', np.array(vec, dtype='complex'), '%5.2f')
+                print("ERROR IN RECURSION (burnside method), vector num != number of classes")
+                print("vec shape", len(vec))
+                return vec
 
 
         def normalize_vec(vec):
@@ -247,8 +263,11 @@ class group():
         order = self.order
         nc = len(cl)
         vec = []
+        index_w = []
         H = [i for i in self.cl_mat]
-        vec = find_nondegenerate_vec(vec, H, nc)
+        vec = find_nondegenerate_vec(vec, H, nc, index_w)
+        #for i in range(len(vec)-1):
+        #    print(vec[i+1] - vec[i])
         #print("before norm", vec)
         vec = normalize_vec(vec)
         #print("after norm",vec)
@@ -260,7 +279,7 @@ class group():
         #print(character_table)
         return character_table
 
-
+#'''
 
 g = [
     [[1,0,0,0],[0,1,0,0],[0,0,1,0]], [[-1,0,0,0],[0,-1,0,0],[0,0,1,0.5]],
@@ -274,10 +293,14 @@ s = [
     [[1,0],[0,1]], [[-1j, 0],[0,1j]],[[0,-1],[1,0]], [[0,-1j], [-1j,0]]
 ]
 
-t = [[0,0,0], [0,1,0]]
+t = [[0,0,0], [0,0,1]]
 gk = []
 
-for i in range(len(g)):
+#x = [i for i in range(len(g))]
+#x = [0,1,6,7] #UX
+x = [0,2,5,7] #UZ
+
+for i in x:
     tmp = element()
     tmp1 = element()
     tmp.init(g[i],s[i] )
@@ -285,6 +308,7 @@ for i in range(len(g)):
     gk.append(tmp)
     gk.append(tmp1)
 
+print("gk len",len(gk))
 tk = []
 for i in t:
     tmp = element()
@@ -301,13 +325,14 @@ Tk.init(tk)
 print(Gk.find_class())
 
 G = group()
-G.group_product(Gk, Tk, boundary=[1,2,1])
+G.group_product(Gk, Tk, boundary=[1,1,2])
 print(G.order)
 print(G.find_class())
 print(len(G.find_class()))
 
 H = G.class_mul_constants()
-print(H)
+#print(H)
 
 character_table = G.burnside_class_table()
-np.savetxt('ct', character_table, '%5.2f')
+np.savetxt('ctd', character_table, '%5.2f')
+#'''

@@ -202,7 +202,7 @@ class group():
 
         def simul_diag_cl_mat(H, vec):
             nc = len(H)
-            cl_table = np.zeros((nc,nc))
+            cl_table = np.zeros((nc,nc), dtype='complex')
             for i in range(nc):
                 diag = np.dot(LA.inv(vec), np.dot(H[i],vec))
                 #print("diag", np.diag(diag))
@@ -222,7 +222,7 @@ class group():
 
         def get_character_table(cl_table,dim):
             nc = len(cl_table)
-            character_table = np.zeros((nc, nc))
+            character_table = np.zeros((nc, nc),dtype='complex')
             for i in range(nc):
                 for j in range(nc):
                     character_table[i,j] = dim[i]/len(cl[j])*cl_table[i,j]
@@ -248,6 +248,8 @@ class group():
 
 
 #'''
+
+#@U
 g = [
     [[1,0,0,0],[0,1,0,0],[0,0,1,0]], [[-1,0,0,0],[0,-1,0,0],[0,0,1,0.5]],
     [[-1, 0,0,0], [0,1,0,0.5], [0,0,-1,0.5]], [[1,0,0,0],[0,-1,0,0.5],[0,0,-1,0]],
@@ -256,12 +258,20 @@ g = [
 ]
 
 
-t = [[0,0,0], [0,1,0]]
+#@UX 1,2,7,8
+#@ZU 1,4,6,8
+
+
+t = [[0,0,0], [0,0,1]]
 gk = []
 
-for i in g:
+#x = [i for i in range(len(g))]
+#x = [0,1,6,7] #UX
+x = [0,2,5,7] #UZ
+
+for i in x:
     tmp = element()
-    tmp.init(i)
+    tmp.init(g[i])
     gk.append(tmp)
 
 tk = []
@@ -280,16 +290,17 @@ Tk.init(tk)
 print(Gk.find_class())
 
 G = group()
-G.group_product(Gk, Tk, boundary=[1,2,1])
+G.group_product(Gk, Tk, boundary=[1,1,2])
+print("g1 element",G.g[1].zip_element())
 print(G.order)
 print(G.find_class())
 print(len(G.find_class()))
 
 H = G.class_mul_constants()
-print(H)
+#print(H)
 
 character_table = G.burnside_class_table()
 np.set_printoptions(precision=3)
-print(character_table)
+np.savetxt('ct', character_table, '%5.2f')
 
 #'''

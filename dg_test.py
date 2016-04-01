@@ -20,19 +20,23 @@ s = [
 
 #print(np.array(s))
 
-'''
-sk = []
-for i in range(len(s)):
-    tmp = element()
-    tmp.spin_init(s[i])
-    tmp1 = element()
-    tmp1.spin_init(-np.array(s[i]))
-    gk.append(tmp)
-    gk.append(tmp1)
-G = group()
-G.init(gk)
-'''
+s1 = [[[1,0],[0,1]], [[-1j, 0],[0,1j]],[[0,-1],[1,0]], [[0,-1j], [-1j,0]]]
 
+#'''
+sk = []
+for i in range(len(s1)):
+    tmp = element()
+    tmp.spin_init(s1[i])
+    tmp1 = element()
+    tmp1.spin_init(-np.array(s1[i]))
+    sk.append(tmp)
+    sk.append(tmp1)
+G = group()
+G.init(sk)
+cl = G.find_class()
+print(cl)
+#'''
+'''
 gk = []
 for i in range(len(g)):
     tmp = element()
@@ -53,4 +57,5 @@ print(H)
 
 character_table = G.burnside_class_table()
 print(character_table)
+'''
 
