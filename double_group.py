@@ -1,5 +1,7 @@
 import numpy as np
 from numpy import linalg as LA
+
+
 class element():
     # the element class contains three variables: D, t, s standing for rotation, translation, and spin-1/2 operation
     # In the element class, we defined three init method, including
@@ -20,10 +22,10 @@ class element():
     #     note that product is defined by operate successively of a on b, spacial and spinor seperately
     # zip_element() is used to show spacial operation tightly
     # xyz() is under development
-    def init(self, a, s = None):
+    def init(self, a, s=None):
         a = np.array(a, dtype='float')
         self.D = a[0:3, 0:3]
-        self.t = a[:,3]
+        self.t = a[:, 3]
         if s is None:
             self.s = np.eye(2, dtype='complex')
         else:
@@ -33,23 +35,28 @@ class element():
         self.D = np.eye(3)
         self.t = np.array(a, dtype='float')
         self.s = np.eye(2, dtype='complex')
+
     def spin_init(self, s):
         self.D = np.eye(3)
         self.t = np.zeros(3)
         self.s = np.array(s, dtype='complex')
+
     def element_product(self, a, b):
-        self.D = np.dot(a.D , b.D)
+        self.D = np.dot(a.D, b.D)
         self.t = np.dot(a.D, b.t) + a.t
         self.s = np.dot(a.s, b.s)
+
     def zip_element(self):
-        a = np.concatenate((self.D, np.array([self.t]).T), axis = 1)
+        a = np.concatenate((self.D, np.array([self.t]).T), axis=1)
         s = self.s
         return a, s
+
     def xyz(self):
         x = str(np.sum(self.D[:, 0])) + 'x' + '+' + str(self.t[0])
         y = str(np.sum(self.D[:, 1])) + 'y' + '+' + str(self.t[1])
         z = str(np.sum(self.D[:, 2])) + 'z' + '+' + str(self.t[2])
         return x + ',' + y + ',' + z
+
 
 class group():
     # Group mainly deals with space group and double space group. group element is encapsulated in class element
@@ -77,7 +84,7 @@ class group():
     # burnside_class_table(), burnside method for getting character table, return character_table
     # example usage is at the end
 
-    def init(self, g, boundary = [1,1,1]):
+    def init(self, g, boundary=[1, 1, 1]):
         self.g = g
         self.boundary = boundary
         self.order = len(self.g)
@@ -87,7 +94,8 @@ class group():
         equal = False
         if np.allclose(a.D, b.D) and np.allclose(a.s, b.s):
             t = a.t - b.t
-            if np.mod(t[0], self.boundary[0]) == 0 and np.mod(t[1], self.boundary[1]) == 0 and np.mod(t[2], self.boundary[2]) == 0:
+            if np.mod(t[0], self.boundary[0]) == 0 and np.mod(t[1], self.boundary[1]) == 0 and \
+                            np.mod(t[2], self.boundary[2]) == 0:
                 equal = True
         return equal
 
@@ -113,13 +121,13 @@ class group():
     def find_class(self):
         classes = [[0]]
         cnt = 1
-        i=1
-        while i < self.order and cnt < self.order :
+        i = 1
+        while i < self.order and cnt < self.order:
             if i not in [item for sublist in classes for item in sublist]:
                 c = [i]
                 cnt += 1
                 j = 1
-                while j < self.order and cnt < self.order :
+                while j < self.order and cnt < self.order:
                     tmp = self.mtable[self.inverse_elelment(j), self.mtable[i, j]]
                     if tmp not in c:
                         c.append(tmp)
@@ -130,7 +138,7 @@ class group():
         self.cl = classes
         return classes
 
-    def group_product(self, g1, g2, boundary = [1,2,2]):
+    def group_product(self, g1, g2, boundary=[1, 2, 2]):
         glist = []
         for i in range(g1.order):
             for j in range(g2.order):
@@ -161,13 +169,13 @@ class group():
     def class_mul_constants(self):
         cl = self.cl
         nc = len(cl)
-        #num_in_cl = [len(i) for i in cl]
-        H = np.zeros((nc,nc,nc))
+        # num_in_cl = [len(i) for i in cl]
+        H = np.zeros((nc, nc, nc))
         for i in range(nc):
             for j in range(nc):
-                elist = self.subset_product(cl[i],cl[j])
+                elist = self.subset_product(cl[i], cl[j])
                 for k in range(nc):
-                    H[i,j,k] = elist.count(cl[k][0])
+                    H[i, j, k] = elist.count(cl[k][0])
         self.cl_mat = H
         return H
 
@@ -188,24 +196,23 @@ class group():
                 x = np.nonzero(vec[i])
                 flag = x[0][0]
                 for j in range(i + 1, len(vec)):
-                    if not np.allclose(vec[j][flag], 0) :
-                        if np.allclose(vec[i], (vec[i][flag]/vec[j][flag])* vec[j]) :
-
+                    if not np.allclose(vec[j][flag], 0):
+                        if np.allclose(vec[i], (vec[i][flag] / vec[j][flag]) * vec[j]):
                             same_vec_index.append(j)
 
             same_vec_index = list(set(same_vec_index))
-            same_vec_index = sorted(same_vec_index, reverse = True)
+            same_vec_index = sorted(same_vec_index, reverse=True)
 
             for i in same_vec_index:
                 del vec[i]
             return vec
 
-        #def check_same_eigenval(w):
+        # def check_same_eigenval(w):
 
         def find_nondegenerate_vec(vec, H, nc, index_w):
             # index_w exists for checking when wrong, this method might be problematic as it contains round off errors
             for i in range(len(H)):
-                w,v = LA.eig(H[i])
+                w, v = LA.eig(H[i])
                 w = np.array(list(w))
                 index = []
                 w1 = []
@@ -221,7 +228,7 @@ class group():
 
                 # start picking out those non-degenerate vecs
                 for j in index:
-                    vec.append(v[:,j])
+                    vec.append(v[:, j])
                     w1.append(w[j])
                 index_w.append(w1)
 
@@ -229,8 +236,8 @@ class group():
                 vec = check_same_vec(vec)
             if len(vec) != nc and len(H) > 1:
                 h = []
-                for i in range(len(H)-1):
-                    h.append(H[i] + H[i+1])
+                for i in range(len(H) - 1):
+                    h.append(H[i] + H[i + 1])
 
                 return find_nondegenerate_vec(vec, h, nc, index_w)
             elif len(vec) == nc:
@@ -247,16 +254,16 @@ class group():
 
         def normalize_vec(vec):
             for i in range(len(vec)):
-                vec[i] = vec[i] * (1/vec[i][0])
+                vec[i] = vec[i] * (1 / vec[i][0])
             vec = np.array(vec).T
             return vec
 
         def simul_diag_cl_mat(H, vec):
             nc = len(H)
-            cl_table = np.zeros((nc,nc),dtype='complex')
+            cl_table = np.zeros((nc, nc), dtype='complex')
             for i in range(nc):
-                diag = np.dot(LA.inv(vec), np.dot(H[i],vec))
-                cl_table[:,i] = np.diag(diag)
+                diag = np.dot(LA.inv(vec), np.dot(H[i], vec))
+                cl_table[:, i] = np.diag(diag)
             return cl_table
 
         def get_irrep_dim(cl_table):
@@ -265,17 +272,17 @@ class group():
             for i in range(nc):
                 tmp = 0
                 for j in range(nc):
-                    tmp += cl_table[i,j]* np.conj(cl_table[i,j])/len(self.cl[j])
-                d_square = self.order/tmp
+                    tmp += cl_table[i, j] * np.conj(cl_table[i, j]) / len(self.cl[j])
+                d_square = self.order / tmp
                 d.append(np.sqrt(d_square))
             return d
 
-        def get_character_table(cl_table,dim):
+        def get_character_table(cl_table, dim):
             nc = len(cl_table)
-            character_table = np.zeros((nc, nc),dtype='complex')
+            character_table = np.zeros((nc, nc), dtype='complex')
             for i in range(nc):
                 for j in range(nc):
-                    character_table[i,j] = dim[i]/len(cl[j])*cl_table[i,j]
+                    character_table[i, j] = dim[i] / len(cl[j]) * cl_table[i, j]
             character_table = character_table[np.argsort(character_table[:, 0])]
             return character_table
 
@@ -297,47 +304,48 @@ class group():
         vec = normalize_vec(vec)
         cl_table = simul_diag_cl_mat(H, vec)
         dim = get_irrep_dim(cl_table)
-        character_table = get_character_table(cl_table,dim)
+        character_table = get_character_table(cl_table, dim)
         return character_table
 
-#'''
+
+# '''
 
 g = [
-    [[1,0,0,0],[0,1,0,0],[0,0,1,0]], [[-1,0,0,0],[0,-1,0,0],[0,0,1,0.5]],
-    [[-1, 0,0,0], [0,1,0,0.5], [0,0,-1,0.5]], [[1,0,0,0],[0,-1,0,0.5],[0,0,-1,0]],
-    [[-1,0,0,0], [0,-1,0,0], [0,0,-1,0]], [[1,0,0,0],[0,1,0,0],[0,0,-1,0.5]],
-    [[1,0,0,0],[0,-1,0,0.5], [0,0,1,0.5]], [[-1,0,0,0],[0,1,0,0.5], [0,0,1,0]]
+    [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]], [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0.5]],
+    [[-1, 0, 0, 0], [0, 1, 0, 0.5], [0, 0, -1, 0.5]], [[1, 0, 0, 0], [0, -1, 0, 0.5], [0, 0, -1, 0]],
+    [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0]], [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0.5]],
+    [[1, 0, 0, 0], [0, -1, 0, 0.5], [0, 0, 1, 0.5]], [[-1, 0, 0, 0], [0, 1, 0, 0.5], [0, 0, 1, 0]]
 ]
 
 s = [
-    [[1,0],[0,1]], [[-1j, 0],[0,1j]],[[0,-1],[1,0]], [[0,-1j], [-1j,0]],
-    [[1,0],[0,1]], [[-1j, 0],[0,1j]],[[0,-1],[1,0]], [[0,-1j], [-1j,0]]
+    [[1, 0], [0, 1]], [[-1j, 0], [0, 1j]], [[0, -1], [1, 0]], [[0, -1j], [-1j, 0]],
+    [[1, 0], [0, 1]], [[-1j, 0], [0, 1j]], [[0, -1], [1, 0]], [[0, -1j], [-1j, 0]]
 ]
 
-t = [[0,0,0], [0,1,0]]
+t = [[0, 0, 0], [0, 1, 0]]
 gk = []
 
-#x = [i for i in range(len(g))]
-x = [0,1,6,7] #UX
-#x = [0,2,5,7] #UZ
+# x = [i for i in range(len(g))]
+x = [0, 1, 6, 7]  # UX
+# x = [0,2,5,7] #UZ
 
 for i in x:
     tmp = element()
     tmp1 = element()
-    tmp.init(g[i],s[i] )
+    tmp.init(g[i], s[i])
     tmp1.init(g[i], -np.array(s[i], dtype='complex'))
     gk.append(tmp)
     gk.append(tmp1)
 
-print("gk len",len(gk))
+print("gk len", len(gk))
 tk = []
 for i in t:
     tmp = element()
     tmp.trans_init(i)
     tk.append(tmp)
 
-#[print(i.zip_element()) for i in gk]
-#[print(i.zip_element()) for i in tk]
+# [print(i.zip_element()) for i in gk]
+# [print(i.zip_element()) for i in tk]
 
 Gk = group()
 Gk.init(gk)
@@ -346,17 +354,17 @@ Tk.init(tk)
 print(Gk.find_class())
 
 G = group()
-G.group_product(Gk, Tk, boundary=[1,2,1])
-print("order",G.order)
-print("class",G.find_class())
+G.group_product(Gk, Tk, boundary=[1, 2, 1])
+print("order", G.order)
+print("class", G.find_class())
 print("nc", len(G.find_class()))
 
 for i in range(4):
     tmp = G.g[i]
-    print(i,tmp.zip_element())
+    print(i, tmp.zip_element())
 H = G.class_mul_constants()
-#print(H)
+# print(H)
 
 character_table = G.burnside_class_table()
 np.savetxt('ctd', character_table, '%5.2f')
-#'''
+# '''
