@@ -325,8 +325,8 @@ s = [
 t = [[0, 0, 0], [0, 1, 0]]
 gk = []
 
-# x = [i for i in range(len(g))]
-x = [0, 1, 6, 7]  # UX
+x = [i for i in range(len(g))]
+#x = [0, 1, 6, 7]  # UX
 # x = [0,2,5,7] #UZ
 
 for i in x:

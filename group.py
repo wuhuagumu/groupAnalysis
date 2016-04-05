@@ -1,11 +1,14 @@
 import numpy as np
 from numpy import linalg as LA
 
+
 def p2r(radii, angles):
     return radii * np.exp(1j*angles)
 
+
 def r2p(x):
     return abs(x), np.angle(x)
+
 
 class element():
     def init(self, a):
@@ -89,7 +92,7 @@ class group():
         self.cl = classes
         return classes
 
-    def group_product(self, g1, g2, boundary=[1, 2, 2]):
+    def group_product(self, g1, g2, boundary=[1, 1, 1]):
 
         glist = []
         for i in range(g1.order):
@@ -144,8 +147,13 @@ class group():
         def check_same_vec(vec):
             same_vec_index = []
             for i in range(len(vec)):
-                x = np.nonzero(vec[i])
-                flag = x[0][0]
+                #x = np.nonzero(vec[i])
+                #flag = x[0][0]
+                for j in range(len(vec[i])):
+                    if not np.allclose(vec[i][j], 0):
+                        flag = j
+                        break
+
                 for j in range(i + 1, len(vec)):
                     if not np.allclose(vec[j][flag], 0):
                         if np.allclose(vec[i], (vec[i][flag] / vec[j][flag]) * vec[j]):
@@ -236,6 +244,7 @@ class group():
         vec = find_nondegenerate_vec(vec, H, nc)
         vec = normalize_vec(vec)
         cl_table = simul_diag_cl_mat(H, vec)
+        #print("class table", cl_table)
         dim = get_irrep_dim(cl_table)
         character_table = get_character_table(cl_table, dim)
         return character_table
@@ -243,7 +252,7 @@ class group():
     def regular_rep(self, element):  # element is the number of the element in group
         reg_rep = np.zeros((self.order, self.order))
         for i in range(self.order):
-            reg_rep[self.mtable[element, i], i] = 1
+            reg_rep[i, self.mtable[element, i]] = 1
         return reg_rep
 
     def element_order(self, element):
@@ -265,7 +274,8 @@ class group():
         x = range(self.order)
         y = np.dot(reg_rep, x)
         y = np.array(y, dtype='int')
-        # print("after rearrangement", y)
+        #print("reg_rep \n",reg_rep)
+        print("after rearrangement", y)
         permutation_cycle = []
         # determine cycle and cycle length
         i = 0
@@ -281,7 +291,7 @@ class group():
                     l.append(j)
                 permutation_cycle.append(l)
             i += 1
-        # print("permutation cycle: ", permutation_cycle)
+        print("permutation cycle: ", permutation_cycle)
 
         # permutation cycle determined, the next is to determine the eigenvector
         eigencolumns = np.zeros((self.order, self.order), dtype='complex')
@@ -323,27 +333,70 @@ class group():
                 return True
         return False
 
+    def check_same_vec(self,vec):
+        same_vec_index = []
+        for i in range(len(vec)):
+            for j in range(len(vec[i])):
+                if not np.allclose(vec[i][j],0):
+                    flag = j
+            #x = np.nonzero(vec[i])
+            #flag = x[0][0]
+            for j in range(i + 1, len(vec)):
+                if not np.allclose(vec[j][flag], 0):
+                    if np.allclose(vec[i], (vec[i][flag] / vec[j][flag]) * vec[j]):
+                        same_vec_index.append(j)
+
+        same_vec_index = list(set(same_vec_index))
+        same_vec_index = sorted(same_vec_index, reverse=True)
+
+        for i in same_vec_index:
+            del vec[i]
+        return vec
+
     def subspace_eigenvector(self, irrep_index, character_table, reg_rep):
         projection_operator = self.projection_operator(irrep_index, character_table, reg_rep)
         dim = int(character_table[irrep_index, 0])
 
-        print("group: projection operator", projection_operator)
+        #print("group: projection operator", projection_operator)
+        np.savetxt('proj_opera', projection_operator, '%5.2f')
         # for we always choose reg_rep[1] as a start point
 
         for i in range(1, self.order):
             eigenvalues, eigencolumns = self.reg_eigencolumns(reg_rep[i])
             projected_vector = np.dot(projection_operator, eigencolumns)
+            #np.savetxt('eigencolumns', eigencolumns, '%5.2f')
+            #np.savetxt('projected', projected_vector,'%5.2f')
+            #print("projected_vector", projected_vector)
 
             # find those eigencolumns that does not change under projection,
             # save them and their corresponding eigenvalues of reg_rep[i]
+
             vec = []
             vec_val = []
             for j in range(self.order):
-                if self.vec_same(projected_vector[:, j], eigencolumns[:, j]):
+                if not np.allclose(projected_vector[:, j], 0):
                     w1 = projected_vector[:, j]
                     vec.append(w1)
                     vec_val.append(eigenvalues[j])
 
+            #print("before check same vec)",vec)
+            #print("eigenvalues", vec_val)
+            vec = self.check_same_vec(vec)
+            l = len(vec)
+
+            vec = np.array(vec, dtype='complex').T
+            #print("after check same", vec)
+            eigenvector = np.dot(reg_rep[i], vec)
+
+            #print("acting on reg_rep", eigenvector)
+            lam = []
+            for j in range(l):
+                if self.vec_same(eigenvector[:,j], vec[:,j]):
+                    for k in range(self.order):
+                        if not np.allclose(vec[k,j], 0):
+                            lam.append(eigenvector[k,j]/vec[k,j])
+                            break
+            #print("lam", lam)
             # check the projected eigencolumns are not degenerate,
             # if degenerate, start from a different reg_rep[i]
             # the standard is whether same eigenvalues appeared more than dim times
@@ -352,36 +405,37 @@ class group():
                 same_val = []
                 count = []
 
-                for k in range(len(vec_val)):
+                for k in range(len(lam)):
                     cnt = 0
                     tmp = []
-                    for j in range(k, len(vec_val)):
-                        if abs(vec_val[j] - vec_val[k]) < 1e-5 and \
+                    for j in range(k, len(lam)):
+                        if abs(lam[j] - lam[k]) < 1e-5 and \
                                 (j not in [item for sublist in same_val for item in sublist]):
                             cnt += 1
                             tmp.append(j)
                     count.append(cnt)
                     same_val.append(tmp)
-
+                #print("count", count, "same val", same_val)
                 if all(j <= dim for j in count):
                     if dim == 1:
-                        return vec[0]
+                        return vec[:,0]
                     elif len(vec) != 0:
-                        sub_vec = [vec[0]]
+                        sub_vec = [vec[:,0]]
                         for j in range(1, self.order):
-                            new_vec = np.dot(reg_rep[j], vec[0])
+                            new_vec = np.dot(reg_rep[j], vec[:,0])
 
-                            if np.allclose(np.multiply(new_vec, vec[0]), 0):
+                            if np.allclose(np.multiply(new_vec, vec[:,0]), 0):
                                 sub_vec.append(new_vec)
                                 if len(sub_vec) == dim:
                                     for k in range(len(sub_vec)):
                                         sub_vec[k] = sub_vec[k] / LA.norm(sub_vec[k])
-
+                                    #print("len sub_vec", sub_vec)
                                     return sub_vec
 
     def irrep(self, irrep_index):
         # note that the dim of this irrep_index should be >1
         # if the dim ==1, return character table
+        print("self mtable", self.mtable)
         ctable = self.burnside_class_table()
         if np.allclose(ctable[irrep_index, 0], 1):
             return ctable[irrep_index]
@@ -391,7 +445,7 @@ class group():
             reg_rep[i, :, :] = self.regular_rep(i)
         subspace_vec = self.subspace_eigenvector(irrep_index, ctable, reg_rep)
         vec = np.array(subspace_vec, dtype='complex').T
-        print("character table", ctable)
+        print("character table \n", ctable)
 
         print("vec", vec)
         irrep = []
@@ -400,18 +454,7 @@ class group():
             irrep.append(tmp)
         return irrep
 
-
-
-
-
-
-
-
-
-
-
-
-'''
+#'''
 
 # @U
 g = [
@@ -428,8 +471,8 @@ g = [
 t = [[0, 0, 0], [0, 1, 0]]
 gk = []
 
-# x = [i for i in range(len(g))]
-x = [0, 1, 6, 7]  # UX
+x = [i for i in range(len(g))]
+#x = [0, 1, 6, 7]  # UX
 # x = [0,2,5,7] #UZ
 
 for i in x:
@@ -450,7 +493,8 @@ Tk.init(tk)
 print(Gk.find_class())
 
 G = group()
-G.group_product(Gk, Tk, boundary=[1, 2, 1])
+G.group_product(Gk, Tk , boundary=[1, 2, 1])
+#print("multiply table \n", G.mtable)
 print("g1 element", G.g[1].zip_element())
 print(G.order)
 print(G.find_class())
@@ -463,4 +507,9 @@ character_table = G.burnside_class_table()
 np.set_printoptions(precision=3)
 np.savetxt('ct', character_table, '%5.2f')
 
-'''
+irrep = G.irrep(8)
+print("irrep: \n", irrep)
+
+
+#'''
+
