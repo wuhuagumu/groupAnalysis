@@ -10,14 +10,32 @@ def r2p(x):
     return abs(x), np.angle(x)
 
 
-class element():
-    def init(self, a):
-        a = np.array(a, dtype='float')
-        self.D = a[0:3, 0:3]
-        self.t = a[:, 3]
+def gram_schmidt(vec):
+    result = []
+    dim = len(vec[0])
+    for i in range(len(vec)):
+        tmp = np.zeros(dim, dtype='complex')
+        for j in range(i):
+            tmp += - np.dot(np.conj(vec[i]), result[j])/(np.dot(np.conj(result[j]), result[j]))*vec[j]
+        result.append(tmp + vec[i])
 
-    def trans_init(self, a):
-        self.D = np.eye(3)
+    for i in range(len(result)):
+        result[i] = result[i] / LA.norm(result[i])
+    return result
+
+
+class element():
+    def init(self, a, dim=3):
+        a = np.array(a, dtype='float')
+        self.D = a[0:dim, 0:dim]
+        self.t = a[:, dim]
+
+    def rotation_init(self, a, dim = 3):
+        self.D = a
+        self.t = np.zeros(dim, dtype='complex')
+
+    def trans_init(self, a, dim = 3):
+        self.D = np.eye(dim)
         self.t = np.array(a, dtype='float')
 
     def element_product(self, a, b):
@@ -28,6 +46,16 @@ class element():
         a = np.concatenate((self.D, np.array([self.t]).T), axis=1)
         return a
 
+    def check_equality(self, a, b, boundary=[1, 1, 1]):
+        equal = False
+        if np.allclose(a.D, b.D):
+            t = a.t - b.t
+            if np.allclose(t,0) == True:
+                equal = True
+            elif np.allclose(np.mod(t, boundary), 0):
+                equal = True
+        return equal
+
     def xyz(self):
         x = str(np.sum(self.D[:, 0])) + 'x' + '+' + str(self.t[0])
         y = str(np.sum(self.D[:, 1])) + 'y' + '+' + str(self.t[1])
@@ -36,20 +64,13 @@ class element():
 
 
 class group():
-    def init(self, g, boundary=[1, 1, 1]):
+    def init(self, g,  dim = 3,boundary = [1,1,1]):
         self.g = g
         self.boundary = boundary
         self.order = len(self.g)
         self.multi_table()
 
-    def check_equality(self, a, b):
-        equal = False
-        if np.allclose(a.D, b.D):
-            t = a.t - b.t
-            if np.mod(t[0], self.boundary[0]) == 0 and np.mod(t[1], self.boundary[1]) == 0 and \
-                            np.mod(t[2],self.boundary[2]) == 0:
-                equal = True
-        return equal
+
 
     def multi_table(self):
         mtable = []
@@ -59,8 +80,9 @@ class group():
                 tmp = element()
                 tmp.element_product(self.g[i], self.g[j])
                 for k in range(self.order):
-                    if self.check_equality(tmp, self.g[k]) == True:
+                    if tmp.check_equality(tmp, self.g[k], self.boundary) == True:
                         line.append(k)
+                        break
 
             mtable.append(line)
 
@@ -92,7 +114,7 @@ class group():
         self.cl = classes
         return classes
 
-    def group_product(self, g1, g2, boundary=[1, 1, 1]):
+    def group_product(self, g1, g2, dim = 3, boundary=[1, 1, 1]):
 
         glist = []
         for i in range(g1.order):
@@ -101,7 +123,7 @@ class group():
                 tmp.element_product(g1.g[i], g2.g[j])
                 glist.append(tmp)
 
-        self.init(glist, boundary)
+        self.init(glist, dim , boundary)
         return self
 
     def subset_product(self, s1, s2):
@@ -111,7 +133,7 @@ class group():
                 tmp = element()
                 tmp.element_product(self.g[s1[i]], self.g[s2[j]])
                 for k in range(self.order):
-                    if self.check_equality(tmp, self.g[k]):
+                    if tmp.check_equality(tmp, self.g[k], self.boundary):
                         elist.append(k)
                         break
         return elist
@@ -178,7 +200,7 @@ class group():
                 for k in range(len(w)):
                     cnt = 0
                     for j in range(len(w)):
-                        if abs(w[j] - w[k]) < 1e-3:
+                        if abs(w[j] - w[k]) < 1e-5:
                             cnt += 1
                     if cnt == 1:
                         index.append(k)
@@ -355,7 +377,7 @@ class group():
 
     def subspace_eigenvector(self, irrep_index, character_table, reg_rep):
         projection_operator = self.projection_operator(irrep_index, character_table, reg_rep)
-        dim = int(character_table[irrep_index, 0])
+        dim = round(abs(character_table[irrep_index, 0]))
 
         #print("group: projection operator", projection_operator)
         np.savetxt('proj_opera', projection_operator, '%5.2f')
@@ -364,8 +386,8 @@ class group():
         for i in range(1, self.order):
             eigenvalues, eigencolumns = self.reg_eigencolumns(reg_rep[i])
             projected_vector = np.dot(projection_operator, eigencolumns)
-            #np.savetxt('eigencolumns', eigencolumns, '%5.2f')
-            #np.savetxt('projected', projected_vector,'%5.2f')
+            np.savetxt('eigencolumns', eigencolumns, '%5.2f')
+            np.savetxt('projected', projected_vector,'%5.2f')
             #print("projected_vector", projected_vector)
 
             # find those eigencolumns that does not change under projection,
@@ -382,11 +404,13 @@ class group():
             #print("before check same vec)",vec)
             #print("eigenvalues", vec_val)
             vec = self.check_same_vec(vec)
+            print("vec[0]", vec[0], vec[2])
             l = len(vec)
 
             vec = np.array(vec, dtype='complex').T
             #print("after check same", vec)
             eigenvector = np.dot(reg_rep[i], vec)
+            print("eigenvector[0]", eigenvector[:,0])
 
             #print("acting on reg_rep", eigenvector)
             lam = []
@@ -396,7 +420,7 @@ class group():
                         if not np.allclose(vec[k,j], 0):
                             lam.append(eigenvector[k,j]/vec[k,j])
                             break
-            #print("lam", lam)
+            print("lam", lam)
             # check the projected eigencolumns are not degenerate,
             # if degenerate, start from a different reg_rep[i]
             # the standard is whether same eigenvalues appeared more than dim times
@@ -415,37 +439,46 @@ class group():
                             tmp.append(j)
                     count.append(cnt)
                     same_val.append(tmp)
-                #print("count", count, "same val", same_val)
+                print("count", count, "same val", same_val)
                 if all(j <= dim for j in count):
+                    #for k in range(len(lam)):
+                    #    if not np.allclose(lam[k],1):
+                    #        flag = k
+                    flag = 0
                     if dim == 1:
-                        return vec[:,0]
-                    elif len(vec) != 0:
-                        sub_vec = [vec[:,0]]
+                        return vec[:,flag]
+                    else:
+                        sub_vec = [vec[:,flag]]
                         for j in range(1, self.order):
-                            new_vec = np.dot(reg_rep[j], vec[:,0])
-
-                            if np.allclose(np.multiply(new_vec, vec[:,0]), 0):
+                            if j != i:
+                                new_vec = np.dot(reg_rep[j], vec[:,flag])
                                 sub_vec.append(new_vec)
-                                if len(sub_vec) == dim:
-                                    for k in range(len(sub_vec)):
-                                        sub_vec[k] = sub_vec[k] / LA.norm(sub_vec[k])
-                                    #print("len sub_vec", sub_vec)
-                                    return sub_vec
+                        #print("before check same sub_vec", sub_vec)
+                        sub_vec = self.check_same_vec(sub_vec)
+                        if len(sub_vec) != dim:
+                            print("Error, subspace vector is wrong")
+                            return
+                        print("after check same sub_vec", sub_vec)
+                        # orthonormalization
+                        sub_vec = gram_schmidt(sub_vec)
+                        sub_vec = np.array(sub_vec, dtype='complex').T
+                        return sub_vec
 
     def irrep(self, irrep_index):
         # note that the dim of this irrep_index should be >1
         # if the dim ==1, return character table
         print("self mtable", self.mtable)
         ctable = self.burnside_class_table()
+        print("character table \n", ctable)
+        dim = ctable[irrep_index, 0]
+        print("dim", dim)
         if np.allclose(ctable[irrep_index, 0], 1):
             return ctable[irrep_index]
 
         reg_rep = np.zeros((self.order, self.order, self.order), dtype='int')
         for i in range(self.order):
             reg_rep[i, :, :] = self.regular_rep(i)
-        subspace_vec = self.subspace_eigenvector(irrep_index, ctable, reg_rep)
-        vec = np.array(subspace_vec, dtype='complex').T
-        print("character table \n", ctable)
+        vec = self.subspace_eigenvector(irrep_index, ctable, reg_rep)
 
         print("vec", vec)
         irrep = []
@@ -454,21 +487,21 @@ class group():
             irrep.append(tmp)
         return irrep
 
-#'''
+
 
 # @U
 g = [
     [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]], [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0.5]],
     [[-1, 0, 0, 0], [0, 1, 0, 0.5], [0, 0, -1, 0.5]], [[1, 0, 0, 0], [0, -1, 0, 0.5], [0, 0, -1, 0]],
     [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0]], [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0.5]],
-    [[1, 0, 0, 0], [0, -1, 0, 0.5], [0, 0, 1, 0.5]], [[-1, 0, 0, 0], [0, 1, 0, 0.5], [0, 0, 1, 0]]
+    [[1, 0, 0, 0], [0, -1, 0, -0.5], [0, 0, 1, -0.5]], [[-1, 0, 0, 0], [0, 1, 0, -0.5], [0, 0, 1, 0]]
 ]
 
 # @UX 1,2,7,8
 # @ZU 1,4,6,8
 
 
-t = [[0, 0, 0], [0, 1, 0]]
+t = [[0, 0, 0], [0, 0, 1]]
 gk = []
 
 x = [i for i in range(len(g))]
@@ -493,8 +526,8 @@ Tk.init(tk)
 print(Gk.find_class())
 
 G = group()
-G.group_product(Gk, Tk , boundary=[1, 2, 1])
-#print("multiply table \n", G.mtable)
+G.group_product(Tk, Gk, boundary=[1, 1, 2])
+# print("multiply table \n", G.mtable)
 print("g1 element", G.g[1].zip_element())
 print(G.order)
 print(G.find_class())
@@ -508,8 +541,34 @@ np.set_printoptions(precision=3)
 np.savetxt('ct', character_table, '%5.2f')
 
 irrep = G.irrep(8)
-print("irrep: \n", irrep)
+print("irrep\n", irrep)
 
 
-#'''
+file = open('irrep-tkgk-010', 'w')
+print("irrep-tkgk-010")
+
+g_irrep = []
+for i in range(len(irrep)):
+
+    tmp = G.g[i]
+    tmp1 = element()
+    tmp1.rotation_init(irrep[i], dim=2)
+    g_irrep.append(tmp1)
+    print(i,file=file)
+    print(tmp.zip_element(),file=file)
+    print(irrep[i],file=file)
+
+file.close()
+
+G_irrep = group()
+G_irrep.init(g_irrep)
+print("G_irrep multiply table\n", G_irrep.mtable)
+
+'''
+Gk.find_class()
+Gk.class_mul_constants()
+character_table = Gk.burnside_class_table()
+np.savetxt('ct', character_table, '%5.2f')
+Gk.irrep(8)
+'''
 

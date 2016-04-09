@@ -1,0 +1,20 @@
+import numpy as np
+from numpy import linalg as LA
+def gram_schmidt(vec):
+    result = []
+    dim = len(vec[0])
+    print("vec[0]", vec[0])
+    for i in range(len(vec)):
+        tmp = np.zeros(dim, dtype='complex')
+        for j in range(i):
+            tmp += - np.dot(np.conj(vec[i]), result[j])/(np.dot(np.conj(result[j]), result[j]))*vec[j]
+        result.append(tmp + vec[i])
+
+    for i in range(len(result)):
+        result[i] = result[i] / LA.norm(result[i])
+    return result
+
+vec = [np.array([1,2,3]), np.array([3,2,1]), np.array([1,1,1])]
+
+result = gram_schmidt(vec)
+print(result)
