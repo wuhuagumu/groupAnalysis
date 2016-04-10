@@ -46,13 +46,13 @@ class element():
         a = np.concatenate((self.D, np.array([self.t]).T), axis=1)
         return a
 
-    def check_equality(self, a, b, boundary=[1, 1, 1]):
+    def check_equality(self, a, b, kpt):
         equal = False
         if np.allclose(a.D, b.D):
             t = a.t - b.t
             if np.allclose(t,0) == True:
                 equal = True
-            elif np.allclose(np.mod(t, boundary), 0):
+            elif np.allclose(np.mod(np.dot(t, kpt), 1), 0):
                 equal = True
         return equal
 
@@ -64,9 +64,9 @@ class element():
 
 
 class group():
-    def init(self, g,  dim = 3,boundary = [1,1,1]):
+    def init(self, g,  dim = 3, kpt = [0,0,0]):
         self.g = g
-        self.boundary = boundary
+        self.kpt = kpt
         self.order = len(self.g)
         self.multi_table()
 
@@ -79,8 +79,10 @@ class group():
             for j in range(self.order):
                 tmp = element()
                 tmp.element_product(self.g[i], self.g[j])
+                if i==1 and j ==5:
+                    print("imhere")
                 for k in range(self.order):
-                    if tmp.check_equality(tmp, self.g[k], self.boundary) == True:
+                    if tmp.check_equality(tmp, self.g[k], self.kpt) == True:
                         line.append(k)
                         break
 
@@ -114,7 +116,7 @@ class group():
         self.cl = classes
         return classes
 
-    def group_product(self, g1, g2, dim = 3, boundary=[1, 1, 1]):
+    def group_product(self, g1, g2, dim = 3, kpt = [0,0,0]):
 
         glist = []
         for i in range(g1.order):
@@ -123,7 +125,7 @@ class group():
                 tmp.element_product(g1.g[i], g2.g[j])
                 glist.append(tmp)
 
-        self.init(glist, dim , boundary)
+        self.init(glist, dim , kpt)
         return self
 
     def subset_product(self, s1, s2):
@@ -133,7 +135,7 @@ class group():
                 tmp = element()
                 tmp.element_product(self.g[s1[i]], self.g[s2[j]])
                 for k in range(self.order):
-                    if tmp.check_equality(tmp, self.g[k], self.boundary):
+                    if tmp.check_equality(tmp, self.g[k], self.kpt):
                         elist.append(k)
                         break
         return elist
@@ -141,7 +143,7 @@ class group():
     def check_class(self, element):
         for i in range(len(self.cl)):
             for j in range(len(self.cl[i])):
-                if self.check_equality(element, self.g[self.cl[i][j]]):
+                if element.check_equality(element, self.g[self.cl[i][j]], self.kpt):
                     return i
 
     def check_class_index(self, element):
@@ -274,7 +276,7 @@ class group():
     def regular_rep(self, element):  # element is the number of the element in group
         reg_rep = np.zeros((self.order, self.order))
         for i in range(self.order):
-            reg_rep[i, self.mtable[element, i]] = 1
+            reg_rep[self.mtable[element, i], i] = 1
         return reg_rep
 
     def element_order(self, element):
@@ -385,6 +387,7 @@ class group():
 
         for i in range(1, self.order):
             eigenvalues, eigencolumns = self.reg_eigencolumns(reg_rep[i])
+            print("reg_rep[6]", reg_rep[6])
             projected_vector = np.dot(projection_operator, eigencolumns)
             np.savetxt('eigencolumns', eigencolumns, '%5.2f')
             np.savetxt('projected', projected_vector,'%5.2f')
@@ -394,23 +397,20 @@ class group():
             # save them and their corresponding eigenvalues of reg_rep[i]
 
             vec = []
-            vec_val = []
             for j in range(self.order):
                 if not np.allclose(projected_vector[:, j], 0):
-                    w1 = projected_vector[:, j]
-                    vec.append(w1)
-                    vec_val.append(eigenvalues[j])
+                    vec.append(projected_vector[:, j])
 
             #print("before check same vec)",vec)
             #print("eigenvalues", vec_val)
             vec = self.check_same_vec(vec)
-            print("vec[0]", vec[0], vec[2])
+            #print("vec[0]", vec)
             l = len(vec)
 
             vec = np.array(vec, dtype='complex').T
             #print("after check same", vec)
             eigenvector = np.dot(reg_rep[i], vec)
-            print("eigenvector[0]", eigenvector[:,0])
+            #print("eigenvector[0]", eigenvector[:,0])
 
             #print("acting on reg_rep", eigenvector)
             lam = []
@@ -462,6 +462,7 @@ class group():
                         # orthonormalization
                         sub_vec = gram_schmidt(sub_vec)
                         sub_vec = np.array(sub_vec, dtype='complex').T
+                        print("after gram-schmidt", sub_vec)
                         return sub_vec
 
     def irrep(self, irrep_index):
@@ -481,6 +482,8 @@ class group():
         vec = self.subspace_eigenvector(irrep_index, ctable, reg_rep)
 
         print("vec", vec)
+        print("np.dot", np.dot(reg_rep[6], vec))
+        print(np.conj(vec.T))
         irrep = []
         for i in range(self.order):
             tmp = np.dot(np.conj(vec.T), np.dot(reg_rep[i], vec))
@@ -493,7 +496,7 @@ class group():
 g = [
     [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]], [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0.5]],
     [[-1, 0, 0, 0], [0, 1, 0, 0.5], [0, 0, -1, 0.5]], [[1, 0, 0, 0], [0, -1, 0, 0.5], [0, 0, -1, 0]],
-    [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0]], [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0.5]],
+    [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0]], [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, -0.5]],
     [[1, 0, 0, 0], [0, -1, 0, -0.5], [0, 0, 1, -0.5]], [[-1, 0, 0, 0], [0, 1, 0, -0.5], [0, 0, 1, 0]]
 ]
 
@@ -526,7 +529,7 @@ Tk.init(tk)
 print(Gk.find_class())
 
 G = group()
-G.group_product(Tk, Gk, boundary=[1, 1, 2])
+G.group_product(Tk, Gk, kpt=[0, 0.5, 0.5])
 # print("multiply table \n", G.mtable)
 print("g1 element", G.g[1].zip_element())
 print(G.order)
@@ -544,8 +547,7 @@ irrep = G.irrep(8)
 print("irrep\n", irrep)
 
 
-file = open('irrep-tkgk-010', 'w')
-print("irrep-tkgk-010")
+file = open('irrep', 'w')
 
 g_irrep = []
 for i in range(len(irrep)):
@@ -563,6 +565,17 @@ file.close()
 G_irrep = group()
 G_irrep.init(g_irrep)
 print("G_irrep multiply table\n", G_irrep.mtable)
+
+g_reg = []
+for i in range(G.order):
+    tmp = element()
+    tmp.rotation_init(G.regular_rep(i), dim=16)
+    g_reg.append(tmp)
+
+G_reg = group()
+G_reg.init(g_reg, dim = 16, kpt = np.zeros(16))
+print("G_reg multiply table\n", G_reg.mtable)
+
 
 '''
 Gk.find_class()
