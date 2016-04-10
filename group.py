@@ -64,7 +64,7 @@ class element():
 
 
 class group():
-    def init(self, g,  dim = 3, kpt = [0,0,0]):
+    def init(self, g, kpt=[0, 0, 0]):
         self.g = g
         self.kpt = kpt
         self.order = len(self.g)
@@ -79,8 +79,7 @@ class group():
             for j in range(self.order):
                 tmp = element()
                 tmp.element_product(self.g[i], self.g[j])
-                if i==1 and j ==5:
-                    print("imhere")
+
                 for k in range(self.order):
                     if tmp.check_equality(tmp, self.g[k], self.kpt) == True:
                         line.append(k)
@@ -116,7 +115,7 @@ class group():
         self.cl = classes
         return classes
 
-    def group_product(self, g1, g2, dim = 3, kpt = [0,0,0]):
+    def group_product(self, g1, g2,  kpt = [0,0,0]):
 
         glist = []
         for i in range(g1.order):
@@ -125,7 +124,7 @@ class group():
                 tmp.element_product(g1.g[i], g2.g[j])
                 glist.append(tmp)
 
-        self.init(glist, dim , kpt)
+        self.init(glist, kpt)
         return self
 
     def subset_product(self, s1, s2):
@@ -171,8 +170,6 @@ class group():
         def check_same_vec(vec):
             same_vec_index = []
             for i in range(len(vec)):
-                #x = np.nonzero(vec[i])
-                #flag = x[0][0]
                 for j in range(len(vec[i])):
                     if not np.allclose(vec[i][j], 0):
                         flag = j
@@ -190,7 +187,6 @@ class group():
                 del vec[i]
             return vec
 
-        # def check_same_eigenval(w):
 
         def find_nondegenerate_vec(vec, H, nc):
             for i in range(len(H)):
@@ -332,9 +328,8 @@ class group():
                 for k in range(length - 1):
                     eigencolumns[tmp[k + 1], cnt] = pow(powers, (k + 1))
                 eigenvalues[cnt] = eigencolumns[permutation_cycle[i][1], cnt]
-                # print(eigenvalues[cnt])
                 cnt += 1
-        # print(eigencolumns)
+
         return eigenvalues, eigencolumns
 
     def projection_operator(self, irrep_index, character_table, reg_rep):
@@ -363,8 +358,7 @@ class group():
             for j in range(len(vec[i])):
                 if not np.allclose(vec[i][j],0):
                     flag = j
-            #x = np.nonzero(vec[i])
-            #flag = x[0][0]
+
             for j in range(i + 1, len(vec)):
                 if not np.allclose(vec[j][flag], 0):
                     if np.allclose(vec[i], (vec[i][flag] / vec[j][flag]) * vec[j]):
@@ -380,18 +374,15 @@ class group():
     def subspace_eigenvector(self, irrep_index, character_table, reg_rep):
         projection_operator = self.projection_operator(irrep_index, character_table, reg_rep)
         dim = round(abs(character_table[irrep_index, 0]))
-
-        #print("group: projection operator", projection_operator)
         np.savetxt('proj_opera', projection_operator, '%5.2f')
-        # for we always choose reg_rep[1] as a start point
 
+        # for we always choose reg_rep[1] as a start point
         for i in range(1, self.order):
             eigenvalues, eigencolumns = self.reg_eigencolumns(reg_rep[i])
-            print("reg_rep[6]", reg_rep[6])
             projected_vector = np.dot(projection_operator, eigencolumns)
             np.savetxt('eigencolumns', eigencolumns, '%5.2f')
             np.savetxt('projected', projected_vector,'%5.2f')
-            #print("projected_vector", projected_vector)
+
 
             # find those eigencolumns that does not change under projection,
             # save them and their corresponding eigenvalues of reg_rep[i]
@@ -401,18 +392,13 @@ class group():
                 if not np.allclose(projected_vector[:, j], 0):
                     vec.append(projected_vector[:, j])
 
-            #print("before check same vec)",vec)
-            #print("eigenvalues", vec_val)
             vec = self.check_same_vec(vec)
-            #print("vec[0]", vec)
             l = len(vec)
 
             vec = np.array(vec, dtype='complex').T
-            #print("after check same", vec)
             eigenvector = np.dot(reg_rep[i], vec)
-            #print("eigenvector[0]", eigenvector[:,0])
 
-            #print("acting on reg_rep", eigenvector)
+            # find non-degenerate subspace vector
             lam = []
             for j in range(l):
                 if self.vec_same(eigenvector[:,j], vec[:,j]):
@@ -441,29 +427,25 @@ class group():
                     same_val.append(tmp)
                 print("count", count, "same val", same_val)
                 if all(j <= dim for j in count):
-                    #for k in range(len(lam)):
-                    #    if not np.allclose(lam[k],1):
-                    #        flag = k
+                    # choose different starting eigenvector might result in different irrep, but can be related
+                    # by a unitary transformation
                     flag = 0
-                    if dim == 1:
-                        return vec[:,flag]
-                    else:
-                        sub_vec = [vec[:,flag]]
-                        for j in range(1, self.order):
-                            if j != i:
-                                new_vec = np.dot(reg_rep[j], vec[:,flag])
-                                sub_vec.append(new_vec)
-                        #print("before check same sub_vec", sub_vec)
-                        sub_vec = self.check_same_vec(sub_vec)
-                        if len(sub_vec) != dim:
-                            print("Error, subspace vector is wrong")
-                            return
-                        print("after check same sub_vec", sub_vec)
-                        # orthonormalization
-                        sub_vec = gram_schmidt(sub_vec)
-                        sub_vec = np.array(sub_vec, dtype='complex').T
-                        print("after gram-schmidt", sub_vec)
-                        return sub_vec
+                    # at this time dim must not equal to 1
+                    sub_vec = [vec[:,flag]]
+                    for j in range(1, self.order):
+                        if j != i:
+                            new_vec = np.dot(reg_rep[j], vec[:,flag])
+                            sub_vec.append(new_vec)
+                    sub_vec = self.check_same_vec(sub_vec)
+                    if len(sub_vec) != dim:
+                        print("Error, subspace vector is wrong")
+                        return
+
+                    # orthonormalization
+                    sub_vec = gram_schmidt(sub_vec)
+                    sub_vec = np.array(sub_vec, dtype='complex').T
+
+                    return sub_vec
 
     def irrep(self, irrep_index):
         # note that the dim of this irrep_index should be >1
@@ -481,9 +463,6 @@ class group():
             reg_rep[i, :, :] = self.regular_rep(i)
         vec = self.subspace_eigenvector(irrep_index, ctable, reg_rep)
 
-        print("vec", vec)
-        print("np.dot", np.dot(reg_rep[6], vec))
-        print(np.conj(vec.T))
         irrep = []
         for i in range(self.order):
             tmp = np.dot(np.conj(vec.T), np.dot(reg_rep[i], vec))
@@ -505,12 +484,13 @@ g = [
 
 
 t = [[0, 0, 0], [0, 0, 1]]
-gk = []
+
 
 x = [i for i in range(len(g))]
 #x = [0, 1, 6, 7]  # UX
-# x = [0,2,5,7] #UZ
+#x = [0, 2, 5, 7] # UZ
 
+gk = []
 for i in x:
     tmp = element()
     tmp.init(g[i])
@@ -573,15 +553,7 @@ for i in range(G.order):
     g_reg.append(tmp)
 
 G_reg = group()
-G_reg.init(g_reg, dim = 16, kpt = np.zeros(16))
+G_reg.init(g_reg, kpt = np.zeros(16))
 print("G_reg multiply table\n", G_reg.mtable)
 
-
-'''
-Gk.find_class()
-Gk.class_mul_constants()
-character_table = Gk.burnside_class_table()
-np.savetxt('ct', character_table, '%5.2f')
-Gk.irrep(8)
-'''
 

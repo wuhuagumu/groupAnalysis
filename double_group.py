@@ -2,12 +2,36 @@ import numpy as np
 from numpy import linalg as LA
 
 
+def p2r(radii, angles):
+    return radii * np.exp(1j*angles)
+
+
+def r2p(x):
+    return abs(x), np.angle(x)
+
+
+def gram_schmidt(vec):
+    result = []
+    dim = len(vec[0])
+    for i in range(len(vec)):
+        tmp = np.zeros(dim, dtype='complex')
+        for j in range(i):
+            tmp += - np.dot(np.conj(vec[i]), result[j]) / (np.dot(np.conj(result[j]), result[j])) * vec[j]
+        result.append(tmp + vec[i])
+
+    for i in range(len(result)):
+        result[i] = result[i] / LA.norm(result[i])
+    return result
+
+
 class element():
     # the element class contains three variables: D, t, s standing for rotation, translation, and spin-1/2 operation
     # In the element class, we defined three init method, including
     # init(spacial operation, spinor operation):
     # trans_init(spaceal operation) , spinor is defined to [[1,0],[0,1] ]
     # spin_init(spinor operation), spacial is defined to [[1,0,0,0],[0,1,0,0],[0,0,0,1]]
+    # rotation_init(rotation operation), translation is [0,0,0], spinor is [[1,0],[0,1]]
+    # check equality(), check whether two element is equivalent, returns boolean
     # usage example:
     # for i in x:
     #     tmp = element()
@@ -22,29 +46,45 @@ class element():
     #     note that product is defined by operate successively of a on b, spacial and spinor seperately
     # zip_element() is used to show spacial operation tightly
     # xyz() is under development
-    def init(self, a, s=None):
+    def init(self, a, s=None, dim = 3):
         a = np.array(a, dtype='float')
-        self.D = a[0:3, 0:3]
-        self.t = a[:, 3]
+        self.D = a[0:dim, 0:dim]
+        self.t = a[:, dim]
         if s is None:
             self.s = np.eye(2, dtype='complex')
         else:
             self.s = np.array(s, dtype='complex')
 
-    def trans_init(self, a):
-        self.D = np.eye(3)
+    def trans_init(self, a, dim=3):
+        self.D = np.eye(dim)
         self.t = np.array(a, dtype='float')
         self.s = np.eye(2, dtype='complex')
 
-    def spin_init(self, s):
-        self.D = np.eye(3)
-        self.t = np.zeros(3)
+    def spin_init(self, s, dim=3):
+        self.D = np.eye(dim)
+        self.t = np.zeros(dim)
         self.s = np.array(s, dtype='complex')
+
+    def rotation_init(self, a, dim=3):
+        self.D = a
+        self.t = np.zeros(dim, dtype='float')
+        self.s = np.eye(2, dtype='complex')
 
     def element_product(self, a, b):
         self.D = np.dot(a.D, b.D)
         self.t = np.dot(a.D, b.t) + a.t
         self.s = np.dot(a.s, b.s)
+
+    def check_equality(self, a, b, kpt):
+        equal = False
+        if np.allclose(a.D, b.D) and np.allclose(a.s, b.s):
+            t = a.t - b.t
+            #print(np.dot(t, kpt))
+            if np.allclose(t, 0) == True:
+                equal = True
+            elif np.allclose(np.mod(np.dot(t, kpt), 1), 0):
+                equal = True
+        return equal
 
     def zip_element(self):
         a = np.concatenate((self.D, np.array([self.t]).T), axis=1)
@@ -73,7 +113,6 @@ class group():
     #       obtained cl_mat in class_mul_constants()
     #
     # function list:
-    # check equality(), check whether two element is equivalent, returns boolean
     # multi_table(), get multiplication table of this group
     # iverse_element(a), from multiplication table, get the iverse of a. a is the number of the element in g
     # find_class(), classify the group element by conjugation, return cl (short for class)
@@ -82,22 +121,14 @@ class group():
     # check_class(a), check which class element a belongs
     # class_mul_constants(), find class multiplication constants used for calculating charactertable, return cl_mat
     # burnside_class_table(), burnside method for getting character table, return character_table
+    # the last part is about how to get irrep
     # example usage is at the end
 
-    def init(self, g, boundary=[1, 1, 1]):
+    def init(self, g, kpt=[0, 0, 0]):
         self.g = g
-        self.boundary = boundary
+        self.kpt = kpt
         self.order = len(self.g)
         self.multi_table()
-
-    def check_equality(self, a, b):
-        equal = False
-        if np.allclose(a.D, b.D) and np.allclose(a.s, b.s):
-            t = a.t - b.t
-            if np.mod(t[0], self.boundary[0]) == 0 and np.mod(t[1], self.boundary[1]) == 0 and \
-                            np.mod(t[2], self.boundary[2]) == 0:
-                equal = True
-        return equal
 
     def multi_table(self):
         mtable = []
@@ -107,8 +138,9 @@ class group():
                 tmp = element()
                 tmp.element_product(self.g[i], self.g[j])
                 for k in range(self.order):
-                    if self.check_equality(tmp, self.g[k]) == True:
+                    if tmp.check_equality(tmp, self.g[k], self.kpt) == True:
                         line.append(k)
+                        break
             mtable.append(line)
         self.mtable = np.array(mtable, dtype='int')
         return mtable
@@ -138,14 +170,14 @@ class group():
         self.cl = classes
         return classes
 
-    def group_product(self, g1, g2, boundary=[1, 2, 2]):
+    def group_product(self, g1, g2, kpt=[0, 0, 0]):
         glist = []
         for i in range(g1.order):
             for j in range(g2.order):
                 tmp = element()
                 tmp.element_product(g1.g[i], g2.g[j])
                 glist.append(tmp)
-        self.init(glist, boundary)
+        self.init(glist, kpt)
         return self
 
     def subset_product(self, s1, s2):
@@ -155,7 +187,7 @@ class group():
                 tmp = element()
                 tmp.element_product(self.g[s1[i]], self.g[s2[j]])
                 for k in range(self.order):
-                    if self.check_equality(tmp, self.g[k]):
+                    if tmp.check_equality(tmp, self.g[k], self.kpt):
                         elist.append(k)
                         break
         return elist
@@ -163,7 +195,7 @@ class group():
     def check_class(self, element):
         for i in range(len(self.cl)):
             for j in range(len(self.cl[i])):
-                if self.check_equality(element, self.g[self.cl[i][j]]):
+                if element.check_equality(element, self.g[self.cl[i][j]], self.kpt):
                     return i
 
     def class_mul_constants(self):
@@ -193,8 +225,11 @@ class group():
         def check_same_vec(vec):
             same_vec_index = []
             for i in range(len(vec)):
-                x = np.nonzero(vec[i])
-                flag = x[0][0]
+                for j in range(len(vec[i])):
+                    if not np.allclose(vec[i][j], 0):
+                        flag = j
+                        break
+
                 for j in range(i + 1, len(vec)):
                     if not np.allclose(vec[j][flag], 0):
                         if np.allclose(vec[i], (vec[i][flag] / vec[j][flag]) * vec[j]):
@@ -220,7 +255,7 @@ class group():
                 for k in range(len(w)):
                     cnt = 0
                     for j in range(len(w)):
-                        if abs(w[j] - w[k]) < 1e-3:
+                        if abs(w[j] - w[k]) < 1e-5:
                             cnt += 1
                     if cnt == 1:
                         index.append(k)
@@ -307,14 +342,213 @@ class group():
         character_table = get_character_table(cl_table, dim)
         return character_table
 
+    def regular_rep(self, element):  # element is the number of the element in group
+        reg_rep = np.zeros((self.order, self.order))
+        for i in range(self.order):
+            reg_rep[self.mtable[element, i], i] = 1
+        return reg_rep
+
+    def element_order(self, element):
+        i = 0
+        power = 0
+        element_order = None
+        while i < self.order:
+            i += 1
+            power = self.mtable[power, element]
+            if power == 0:
+                element_order = i
+                break
+        if element_order is None:
+            print("ERROR:, can not find element order")
+            return
+        return element_order
+
+    def reg_eigencolumns(self, reg_rep):
+        x = range(self.order)
+        y = np.dot(reg_rep, x)
+        y = np.array(y, dtype='int')
+        # print("reg_rep \n",reg_rep)
+        print("after rearrangement", y)
+        permutation_cycle = []
+        # determine cycle and cycle length
+        i = 0
+        while i < self.order:
+            if i not in [item for sublist in permutation_cycle for item in sublist]:
+                j = i
+                cnt = 1
+                # this count num has no use actually
+                l = [i]
+                while y[j] != x[i] and cnt <= self.order:
+                    cnt += 1
+                    j = x[y[j]]
+                    l.append(j)
+                permutation_cycle.append(l)
+            i += 1
+        print("permutation cycle: ", permutation_cycle)
+
+        # permutation cycle determined, the next is to determine the eigenvector
+        eigencolumns = np.zeros((self.order, self.order), dtype='complex')
+        cnt = 0
+        eigenvalues = np.zeros(self.order, dtype='complex')
+        for i in range(len(permutation_cycle)):
+            length = len(permutation_cycle[i])
+            tmp = permutation_cycle[i]
+            for j in range(length):
+                powers = p2r(1, 2 * np.pi / length * j)
+
+                eigencolumns[tmp[0], cnt] = 1
+
+                for k in range(length - 1):
+                    eigencolumns[tmp[k + 1], cnt] = pow(powers, (k + 1))
+                eigenvalues[cnt] = eigencolumns[permutation_cycle[i][1], cnt]
+                cnt += 1
+
+        return eigenvalues, eigencolumns
+
+    def projection_operator(self, irrep_index, character_table, reg_rep):
+        # irrep_index is the index of the irrep in character table
+        dim = character_table[irrep_index, 0]
+        projection_operator = np.zeros((self.order, self.order), dtype='complex')
+        for i in range(len(self.cl)):
+            for j in range(len(self.cl[i])):
+                projection_operator += np.conj(character_table[irrep_index, i]) * reg_rep[self.cl[i][j]]
+        projection_operator = dim / self.order * projection_operator
+        return projection_operator
+
+    def vec_same(self, vec1, vec2):
+        flag = None
+        for i in range(len(vec1)):
+            if not np.allclose(vec1[i], 0):
+                flag = i
+        if not np.allclose(vec2[flag], 0):
+            if np.allclose(vec1, (vec1[flag] / vec2[flag]) * vec2):
+                return True
+        return False
+
+    def check_same_vec(self, vec):
+        same_vec_index = []
+        for i in range(len(vec)):
+            for j in range(len(vec[i])):
+                if not np.allclose(vec[i][j], 0):
+                    flag = j
+
+            for j in range(i + 1, len(vec)):
+                if not np.allclose(vec[j][flag], 0):
+                    if np.allclose(vec[i], (vec[i][flag] / vec[j][flag]) * vec[j]):
+                        same_vec_index.append(j)
+
+        same_vec_index = list(set(same_vec_index))
+        same_vec_index = sorted(same_vec_index, reverse=True)
+
+        for i in same_vec_index:
+            del vec[i]
+        return vec
+
+    def subspace_eigenvector(self, irrep_index, character_table, reg_rep):
+        projection_operator = self.projection_operator(irrep_index, character_table, reg_rep)
+        dim = round(abs(character_table[irrep_index, 0]))
+        np.savetxt('proj_opera', projection_operator, '%5.2f')
+
+        # for we always choose reg_rep[1] as a start point
+        for i in range(1, self.order):
+            eigenvalues, eigencolumns = self.reg_eigencolumns(reg_rep[i])
+            projected_vector = np.dot(projection_operator, eigencolumns)
+            np.savetxt('eigencolumns', eigencolumns, '%5.2f')
+            np.savetxt('projected', projected_vector, '%5.2f')
+
+            # find those eigencolumns that does not change under projection,
+            # save them and their corresponding eigenvalues of reg_rep[i]
+
+            vec = []
+            for j in range(self.order):
+                if not np.allclose(projected_vector[:, j], 0):
+                    vec.append(projected_vector[:, j])
+
+            vec = self.check_same_vec(vec)
+            l = len(vec)
+
+            vec = np.array(vec, dtype='complex').T
+            eigenvector = np.dot(reg_rep[i], vec)
+
+            # find non-degenerate subspace vector
+            lam = []
+            for j in range(l):
+                if self.vec_same(eigenvector[:, j], vec[:, j]):
+                    for k in range(self.order):
+                        if not np.allclose(vec[k, j], 0):
+                            lam.append(eigenvector[k, j] / vec[k, j])
+                            break
+            print("lam", lam)
+            # check the projected eigencolumns are not degenerate,
+            # if degenerate, start from a different reg_rep[i]
+            # the standard is whether same eigenvalues appeared more than dim times
+            # first count the occurences of eigenvals of those eigencolumns that survived the projection
+            if len(vec) != 0:
+                same_val = []
+                count = []
+
+                for k in range(len(lam)):
+                    cnt = 0
+                    tmp = []
+                    for j in range(k, len(lam)):
+                        if abs(lam[j] - lam[k]) < 1e-5 and \
+                                (j not in [item for sublist in same_val for item in sublist]):
+                            cnt += 1
+                            tmp.append(j)
+                    count.append(cnt)
+                    same_val.append(tmp)
+                print("count", count, "same val", same_val)
+                if all(j <= dim for j in count):
+                    # choose different starting eigenvector might result in different irrep, but can be related
+                    # by a unitary transformation
+                    flag = 0
+                    # at this time dim must not equal to 1
+                    sub_vec = [vec[:, flag]]
+                    for j in range(1, self.order):
+                        if j != i:
+                            new_vec = np.dot(reg_rep[j], vec[:, flag])
+                            sub_vec.append(new_vec)
+                    sub_vec = self.check_same_vec(sub_vec)
+                    if len(sub_vec) != dim:
+                        print("Error, subspace vector is wrong")
+                        return
+
+                    # orthonormalization
+                    sub_vec = gram_schmidt(sub_vec)
+                    sub_vec = np.array(sub_vec, dtype='complex').T
+
+                    return sub_vec
+
+    def irrep(self, irrep_index):
+        # note that the dim of this irrep_index should be >1
+        # if the dim ==1, return character table
+        print("self mtable", self.mtable)
+        ctable = self.burnside_character_table()
+        print("character table \n", ctable)
+        dim = ctable[irrep_index, 0]
+        print("dim", dim)
+        if np.allclose(ctable[irrep_index, 0], 1):
+            return ctable[irrep_index]
+
+        reg_rep = np.zeros((self.order, self.order, self.order), dtype='int')
+        for i in range(self.order):
+            reg_rep[i, :, :] = self.regular_rep(i)
+        vec = self.subspace_eigenvector(irrep_index, ctable, reg_rep)
+
+        irrep = []
+        for i in range(self.order):
+            tmp = np.dot(np.conj(vec.T), np.dot(reg_rep[i], vec))
+            irrep.append(tmp)
+        return irrep
+
 
 # '''
 
 g = [
     [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]], [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0.5]],
     [[-1, 0, 0, 0], [0, 1, 0, 0.5], [0, 0, -1, 0.5]], [[1, 0, 0, 0], [0, -1, 0, 0.5], [0, 0, -1, 0]],
-    [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0]], [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0.5]],
-    [[1, 0, 0, 0], [0, -1, 0, 0.5], [0, 0, 1, 0.5]], [[-1, 0, 0, 0], [0, 1, 0, 0.5], [0, 0, 1, 0]]
+    [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0]], [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, -0.5]],
+    [[1, 0, 0, 0], [0, -1, 0, -0.5], [0, 0, 1, -0.5]], [[-1, 0, 0, 0], [0, 1, 0, -0.5], [0, 0, 1, 0]]
 ]
 
 s = [
@@ -323,12 +557,13 @@ s = [
 ]
 
 t = [[0, 0, 0], [0, 1, 0]]
-gk = []
+
 
 x = [i for i in range(len(g))]
 #x = [0, 1, 6, 7]  # UX
 # x = [0,2,5,7] #UZ
 
+gk = []
 for i in x:
     tmp = element()
     tmp1 = element()
@@ -337,15 +572,12 @@ for i in x:
     gk.append(tmp)
     gk.append(tmp1)
 
-print("gk len", len(gk))
+
 tk = []
 for i in t:
     tmp = element()
     tmp.trans_init(i)
     tk.append(tmp)
-
-# [print(i.zip_element()) for i in gk]
-# [print(i.zip_element()) for i in tk]
 
 Gk = group()
 Gk.init(gk)
@@ -354,17 +586,46 @@ Tk.init(tk)
 print(Gk.find_class())
 
 G = group()
-G.group_product(Gk, Tk, boundary=[1, 2, 1])
+G.group_product(Tk, Gk, kpt=[0,0.5,0.5])
 print("order", G.order)
 print("class", G.find_class())
 print("nc", len(G.find_class()))
 
-for i in range(4):
-    tmp = G.g[i]
-    print(i, tmp.zip_element())
 H = G.class_mul_constants()
-# print(H)
 
 character_table = G.burnside_character_table()
+np.set_printoptions(precision=3)
 np.savetxt('ctd', character_table, '%5.2f')
-# '''
+
+irrep = G.irrep(9)
+print("irrep\n", irrep)
+
+
+file = open('irrep-dg', 'w')
+
+g_irrep = []
+for i in range(len(irrep)):
+
+    tmp = G.g[i]
+    tmp1 = element()
+    tmp1.rotation_init(irrep[i], dim=2)
+    g_irrep.append(tmp1)
+    print(i,file=file)
+    print(tmp.zip_element(),file=file)
+    print(irrep[i],file=file)
+
+file.close()
+
+G_irrep = group()
+G_irrep.init(g_irrep)
+print("G_irrep multiply table\n", G_irrep.mtable)
+
+g_reg = []
+for i in range(G.order):
+    tmp = element()
+    tmp.rotation_init(G.regular_rep(i), dim=32)
+    g_reg.append(tmp)
+
+G_reg = group()
+G_reg.init(g_reg, kpt = np.zeros(32))
+print("G_reg multiply table is same as G.mtable?\n", np.allclose(G_reg.mtable, G.mtable))
